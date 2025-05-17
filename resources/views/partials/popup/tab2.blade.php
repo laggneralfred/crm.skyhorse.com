@@ -1,0 +1,1 @@
+<div class='grid grid-cols-2 gap-4 p-4'><p>Tab 2 content goes here...</p></div>
