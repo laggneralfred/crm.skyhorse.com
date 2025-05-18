@@ -9,7 +9,6 @@
     <!-- Vite / Alpine -->
     <link rel="stylesheet" href="{{ Vite::asset('resources/css/app.css') }}">
     <script type="module" src="{{ Vite::asset('resources/js/app.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs" defer></script>
 
     <style>
         /* Force visibility and stickiness for the close button */
