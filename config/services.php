@@ -40,6 +40,8 @@ return [
     'hubspot' => [
     'token' => env('HUBSPOT_TOKEN'),
 ],
-
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+    ],
 
 ];

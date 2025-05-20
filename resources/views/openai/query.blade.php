@@ -20,16 +20,17 @@
     @endif
 
     @if (isset($result) && is_array($result))
-        <h2>Query Result:</h2>
-        <table border="1" cellpadding="5" cellspacing="0">
-            <thead>
+        @if (!empty($result) && is_array($result) && isset($result[0]))
+            <h2>Query Result:</h2>
+            <table border="1" cellpadding="5" cellspacing="0">
+                <thead>
                 <tr>
                     @foreach (array_keys((array) $result[0]) as $column)
                         <th>{{ $column }}</th>
                     @endforeach
                 </tr>
-            </thead>
-            <tbody>
+                </thead>
+                <tbody>
                 @foreach ($result as $row)
                     <tr>
                         @foreach ((array) $row as $cell)
@@ -37,8 +38,14 @@
                         @endforeach
                     </tr>
                 @endforeach
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        @elseif (!empty($textResponse))
+            <p><strong>AI Answer:</strong><br>{{ $textResponse }}</p>
+        @else
+            <p>No results returned.</p>
+        @endif
+
     @endif
 
     @if (isset($textResponse) && $textResponse)

@@ -16,38 +16,53 @@ class OpenAIQueryController extends Controller
     public function generate(Request $request)
     {
         $prompt = $request->input('prompt');
-    
-        $cheatSheet = <<<EOT
-    Field explanations for the solar projects database:
-    ( your cheat sheet here )
-    EOT;
-    
+
+        $cheatSheetPath = storage_path('app/solar_cheatsheet.txt');
+        $cheatSheet = file_exists($cheatSheetPath)
+            ? file_get_contents($cheatSheetPath)
+            : '⚠️ Cheat sheet file not found.';
+
         $messages = [
             [
                 'role' => 'system',
-                'content' => 'You are an AI database assistant specialized in a PostgreSQL database about solar energy projects. The database uses case-sensitive field names. Always wrap all table names and column names in double quotes. Only use fields listed below. Do not invent or modify fields.' . "\n\n" . $cheatSheet
+                'content' => <<<EOT
+You are an AI database assistant for a PostgreSQL table called "solar_projects".
+
+Below is the list of valid field names you MUST use when writing SQL queries.
+Only use fields from this list. Do not ask for more field information. Always output a complete SELECT statement.
+
+IMPORTANT:
+- Table name is always "solar_projects"
+- Field names are case-sensitive and must match exactly.
+- Wrap all table and field names in double quotes.
+- Do NOT invent fields or use unspecified ones.
+
+Here is the list of valid fields and their meanings:
+$cheatSheet
+EOT
             ],
             [
                 'role' => 'user',
                 'content' => $prompt,
             ],
         ];
-    
+
+
         $responseText = '';
         $error = null;
         $sql = null;
         $result = null;
         $textResponse = null;
-    
+
         try {
-            $response = Http::withToken(env('OPENAI_API_KEY'))
+            $response = Http::withToken(config('services.openai.key'))
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/chat/completions', [
                     'model' => 'gpt-4',
                     'messages' => $messages,
                     'temperature' => 0,
                 ]);
-    
+
             if ($response->successful()) {
                 $responseText = $response->json()['choices'][0]['message']['content'] ?? '';
             } else {
@@ -56,8 +71,7 @@ class OpenAIQueryController extends Controller
         } catch (\Exception $e) {
             $error = 'Request failed: ' . $e->getMessage();
         }
-    
-        // Early return if OpenAI API failed
+
         if ($error) {
             return view('openai.query', [
                 'prompt' => $prompt,
@@ -66,11 +80,9 @@ class OpenAIQueryController extends Controller
                 'textResponse' => '⚠️ ' . $error,
             ]);
         }
-    
-        // Extract SQL
+
         $sql = $this->extractSql($responseText ?? '');
-    
-        // If no proper SQL, fallback to showing text
+
         if (empty($sql) || !str_starts_with(strtolower(trim($sql)), 'select')) {
             return view('openai.query', [
                 'prompt' => $prompt,
@@ -79,15 +91,14 @@ class OpenAIQueryController extends Controller
                 'textResponse' => $responseText ?: '⚠️ Sorry, I could not generate a valid SQL query from your request.',
             ]);
         }
-    
+
         try {
-            // Validate fields/tables before executing
             $this->validateFieldsInSql($sql);
             $result = DB::select($sql);
         } catch (\Exception $e) {
             $textResponse = '⚠️ ' . $e->getMessage();
         }
-    
+
         return view('openai.query', [
             'prompt' => $prompt,
             'sql' => $sql,
@@ -95,8 +106,7 @@ class OpenAIQueryController extends Controller
             'textResponse' => $textResponse,
         ]);
     }
-    
-    
+
     private function extractSql($openaiResponse)
     {
         if (preg_match('/```sql(.*?)```/s', $openaiResponse, $matches)) {
@@ -108,7 +118,7 @@ class OpenAIQueryController extends Controller
 
     private function validateFieldsInSql($sql)
     {
-        // List of allowed columns
+        // ✅ List of allowed fields
         $allowedFields = [
             'Developer', 'Owner', 'FormerOwner', 'ProjectName', 'ProjectType',
             'ProjectCapacityMW', 'CurrentOperatingCapacityMW', 'ProjectStatus',
@@ -120,28 +130,33 @@ class OpenAIQueryController extends Controller
             'TotalProducingMonths', 'TotalMWhGenerated', 'AverageCapacityFactor',
             'ISO', 'QueueNumber', 'FirstQueueDate'
         ];
-    
-        // List of allowed table names
+
+        // ✅ List of allowed tables
         $allowedTables = [
             'solar_projects',
             'project_contacts',
             'key_company_contacts',
         ];
-    
-        // Extract all identifiers (everything inside double quotes)
-        preg_match_all('/"([^"]+)"/', $sql, $matches);
-        $identifiersUsed = $matches[1] ?? [];
-    
-        foreach ($identifiersUsed as $identifier) {
-            $identifierLower = strtolower($identifier);
-    
-            $allowedFieldsLower = array_map('strtolower', $allowedFields);
-            $allowedTablesLower = array_map('strtolower', $allowedTables);
-    
-            if (!in_array($identifierLower, $allowedFieldsLower) && !in_array($identifierLower, $allowedTablesLower)) {
-                throw new \Exception("Invalid field or table detected in SQL: \"$identifier\"");
+
+        // ✅ Extract only table.field references like "solar_projects"."ProjectName"
+        preg_match_all('/"(\w+)"\."(\w+)"/', $sql, $matches);
+        $tablesUsed = $matches[1] ?? [];
+        $fieldsUsed = $matches[2] ?? [];
+
+        $allowedFieldsLower = array_map('strtolower', $allowedFields);
+        $allowedTablesLower = array_map('strtolower', $allowedTables);
+
+        foreach ($fieldsUsed as $field) {
+            if (!in_array(strtolower($field), $allowedFieldsLower)) {
+                throw new \Exception("Invalid field detected in SQL: \"$field\"");
+            }
+        }
+
+        foreach ($tablesUsed as $table) {
+            if (!in_array(strtolower($table), $allowedTablesLower)) {
+                throw new \Exception("Invalid table detected in SQL: \"$table\"");
             }
         }
     }
-    
+
 }
