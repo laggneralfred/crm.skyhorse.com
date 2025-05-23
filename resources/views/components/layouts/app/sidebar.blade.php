@@ -1,132 +1,91 @@
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
-    <head>
-        @include('partials.head')
-    </head>
-    <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky stashable class="border-r border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
-            <flux:sidebar.toggle class="lg:hidden" icon="x-mark" />
+@props(['title' => ''])
 
-            <a href="{{ route('dashboard') }}" class="me-5 flex items-center space-x-2 rtl:space-x-reverse" wire:navigate>
-                <x-app-logo />
+        <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ $title ? $title . ' | Skyhorse AI' : 'Skyhorse AI' }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-900">
+
+<div class="lg:flex lg:h-screen overflow-hidden">
+
+    {{-- Sidebar (desktop) --}}
+    <aside class="hidden lg:block lg:w-64 bg-white border-r border-gray-200">
+        <div class="p-5 text-xl font-bold border-b border-gray-300 text-gray-800 break-words leading-snug">
+            {{ $title ?? 'Skyhorse' }}
+        </div>
+
+        <nav class="px-4 py-6 space-y-2 text-sm">
+            <a href="{{ route('query.dashboard') }}"
+               class="block px-3 py-2 rounded hover:bg-indigo-100
+               {{ request()->routeIs('query.dashboard') ? 'bg-indigo-200 font-semibold' : '' }}">
+                🔍 Solar Projects Query
             </a>
+            <a href="{{ route('dashboard') }}"
+               class="block px-3 py-2 rounded hover:bg-indigo-100
+               {{ request()->routeIs('dashboard') ? 'bg-indigo-200 font-semibold' : '' }}">
+                🧭 Legacy Dashboard
+            </a>
+        </nav>
+    </aside>
 
-            <flux:navlist variant="outline">
-                <flux:navlist.group :heading="__('Platform')" class="grid">
-                    <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>{{ __('Dashboard') }}</flux:navlist.item>
-                </flux:navlist.group>
-            </flux:navlist>
+    {{-- Mobile sidebar and topbar --}}
+    <div x-data="{ sidebarOpen: false }" class="lg:hidden relative z-50" x-cloak>
+        <div x-show="sidebarOpen" x-transition.opacity
+             class="fixed inset-0 bg-black bg-opacity-50"
+             @click="sidebarOpen = false"></div>
 
-            <flux:spacer />
+        <aside x-show="sidebarOpen"
+               x-transition:enter="transition ease-out duration-200"
+               x-transition:enter-start="-translate-x-full"
+               x-transition:enter-end="translate-x-0"
+               x-transition:leave="transition ease-in duration-150"
+               x-transition:leave-start="translate-x-0"
+               x-transition:leave-end="-translate-x-full"
+               class="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 z-50">
+            <div class="p-5 text-xl font-bold border-b border-gray-300 text-gray-800 break-words leading-snug">
+                {{ $title ?? 'Skyhorse' }}
+            </div>
 
-            <flux:navlist variant="outline">
-                <flux:navlist.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                {{ __('Repository') }}
-                </flux:navlist.item>
+            <nav class="px-4 py-6 space-y-2 text-sm">
+                <a href="{{ route('query.dashboard') }}"
+                   class="block px-3 py-2 rounded hover:bg-indigo-100
+                   {{ request()->routeIs('query.dashboard') ? 'bg-indigo-200 font-semibold' : '' }}">
+                    🔍 Solar Projects Query
+                </a>
+                <a href="{{ route('dashboard') }}"
+                   class="block px-3 py-2 rounded hover:bg-indigo-100
+                   {{ request()->routeIs('dashboard') ? 'bg-indigo-200 font-semibold' : '' }}">
+                    🧭 Legacy Dashboard
+                </a>
+            </nav>
+        </aside>
 
-                <flux:navlist.item icon="book-open-text" href="https://laravel.com/docs/starter-kits" target="_blank">
-                {{ __('Documentation') }}
-                </flux:navlist.item>
-            </flux:navlist>
+        <header class="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+            <button @click="sidebarOpen = true" class="text-gray-500 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"
+                     viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <div class="text-sm font-semibold text-gray-700">{{ $title }}</div>
+        </header>
+    </div>
 
-            <!-- Desktop User Menu -->
-            <flux:dropdown position="bottom" align="start">
-                <flux:profile
-                    :name="auth()->user()->name"
-                    :initials="auth()->user()->initials()"
-                    icon-trailing="chevrons-up-down"
-                />
+    {{-- Main content --}}
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <main class="flex-1 p-6 overflow-y-auto bg-white">
+            {{ $slot }}
+        </main>
+    </div>
+</div>
 
-                <flux:menu class="w-[220px]">
-                    <flux:menu.radio.group>
-                        <div class="p-0 text-sm font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
-                                <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
-                                    <span
-                                        class="flex h-full w-full items-center justify-center rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white"
-                                    >
-                                        {{ auth()->user()->initials() }}
-                                    </span>
-                                </span>
-
-                                <div class="grid flex-1 text-start text-sm leading-tight">
-                                    <span class="truncate font-semibold">{{ auth()->user()->name }}</span>
-                                    <span class="truncate text-xs">{{ auth()->user()->email }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <flux:menu.radio.group>
-                        <flux:menu.item :href="route('settings.profile')" icon="cog" wire:navigate>{{ __('Settings') }}</flux:menu.item>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <form method="POST" action="{{ route('logout') }}" class="w-full">
-                        @csrf
-                        <flux:menu.item as="button" type="submit" icon="arrow-right-start-on-rectangle" class="w-full">
-                            {{ __('Log Out') }}
-                        </flux:menu.item>
-                    </form>
-                </flux:menu>
-            </flux:dropdown>
-        </flux:sidebar>
-
-        <!-- Mobile User Menu -->
-        <flux:header class="lg:hidden">
-            <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
-
-            <flux:spacer />
-
-            <flux:dropdown position="top" align="end">
-                <flux:profile
-                    :initials="auth()->user()->initials()"
-                    icon-trailing="chevron-down"
-                />
-
-                <flux:menu>
-                    <flux:menu.radio.group>
-                        <div class="p-0 text-sm font-normal">
-                            <div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
-                                <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
-                                    <span
-                                        class="flex h-full w-full items-center justify-center rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white"
-                                    >
-                                        {{ auth()->user()->initials() }}
-                                    </span>
-                                </span>
-
-                                <div class="grid flex-1 text-start text-sm leading-tight">
-                                    <span class="truncate font-semibold">{{ auth()->user()->name }}</span>
-                                    <span class="truncate text-xs">{{ auth()->user()->email }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <flux:menu.radio.group>
-                        <flux:menu.item :href="route('settings.profile')" icon="cog" wire:navigate>{{ __('Settings') }}</flux:menu.item>
-                    </flux:menu.radio.group>
-
-                    <flux:menu.separator />
-
-                    <form method="POST" action="{{ route('logout') }}" class="w-full">
-                        @csrf
-                        <flux:menu.item as="button" type="submit" icon="arrow-right-start-on-rectangle" class="w-full">
-                            {{ __('Log Out') }}
-                        </flux:menu.item>
-                    </form>
-                </flux:menu>
-            </flux:dropdown>
-        </flux:header>
-
-        {{ $slot }}
-
-        @fluxScripts
-    </body>
+</body>
 </html>

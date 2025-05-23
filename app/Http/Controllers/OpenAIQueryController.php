@@ -158,5 +158,117 @@ EOT
             }
         }
     }
+    public function dashboard()
+    {
+        return view('openai.dashboard');
+    }
+
+    public function generateDashboard(Request $request)
+    {
+        $prompt = $request->input('prompt');
+        $export = $request->input('export') ?? false;
+
+        $data = $this->processPrompt($prompt);
+
+        // Handle CSV export
+        if ($export && !empty($data['result'])) {
+            $filename = 'solar_query_' . now()->format('Ymd_His') . '.csv';
+            $headers = ['Content-Type' => 'text/csv'];
+            $rows = collect($data['result']);
+
+            $callback = function () use ($rows) {
+                $out = fopen('php://output', 'w');
+                if ($rows->isNotEmpty()) {
+                    fputcsv($out, array_keys((array) $rows->first()));
+                    foreach ($rows as $row) {
+                        fputcsv($out, (array) $row);
+                    }
+                }
+                fclose($out);
+            };
+
+            return response()->stream($callback, 200, array_merge($headers, [
+                'Content-Disposition' => "attachment; filename=\"$filename\"",
+            ]));
+        }
+
+        // ✅ Render your new dashboard view
+        return view('openai.dashboard', $data);
+    }
+
+    private function processPrompt(string $prompt): array
+    {
+        $cheatSheetPath = storage_path('app/solar_cheatsheet.txt');
+        $cheatSheet = file_exists($cheatSheetPath)
+            ? file_get_contents($cheatSheetPath)
+            : '⚠️ Cheat sheet file not found.';
+
+        $messages = [
+            [
+                'role' => 'system',
+                'content' => <<<EOT
+You are an AI database assistant for a PostgreSQL table called "solar_projects".
+
+Below is the list of valid field names you MUST use when writing SQL queries.
+Only use fields from this list. Do not ask for more field information. Always output a complete SELECT statement.
+
+IMPORTANT:
+- Table name is always "solar_projects"
+- Field names are case-sensitive and must match exactly.
+- Wrap all table and field names in double quotes.
+- Do NOT invent fields or use unspecified ones.
+
+Here is the list of valid fields and their meanings:
+$cheatSheet
+EOT
+            ],
+            [
+                'role' => 'user',
+                'content' => $prompt,
+            ],
+        ];
+
+        $responseText = '';
+        $sql = null;
+        $result = null;
+        $textResponse = null;
+
+        try {
+            $response = Http::withToken(config('services.openai.key'))
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => 'gpt-4',
+                    'messages' => $messages,
+                    'temperature' => 0,
+                ]);
+
+            $responseText = $response->json()['choices'][0]['message']['content'] ?? '';
+        } catch (\Exception $e) {
+            return [
+                'error' => '⚠️ Request failed: ' . $e->getMessage(),
+                'prompt' => $prompt,
+            ];
+        }
+
+        $sql = $this->extractSql($responseText ?? '');
+
+        if (empty($sql) || !str_starts_with(strtolower(trim($sql)), 'select')) {
+            return [
+                'sql' => null,
+                'result' => null,
+                'textResponse' => $responseText ?: '⚠️ Could not generate a valid SELECT statement.',
+                'prompt' => $prompt,
+            ];
+        }
+
+        try {
+            $this->validateFieldsInSql($sql);
+            $result = DB::select($sql);
+        } catch (\Exception $e) {
+            $textResponse = '⚠️ ' . $e->getMessage();
+        }
+
+        return compact('prompt', 'sql', 'result', 'textResponse');
+    }
 
 }

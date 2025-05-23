@@ -1,47 +1,23 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-// use Illuminate\Http\Request;
+use Illuminate\Http\Request;
 use App\Models\SolarProject;
 use App\Http\Controllers\HubspotSyncController;
+use App\Http\Controllers\OpenAIQueryController;
+use App\Http\Controllers\ProfileController; // ✅ Breeze profile controller
+use App\Livewire\Settings\{Appearance, Password, Profile};
 use Livewire\Livewire;
 use App\Http\Livewire\SolarProjectViewer;
-use App\Livewire\Settings\{Appearance, Password, Profile};
-use App\Http\Controllers\OpenAIQueryController;
-
-use Illuminate\Http\Request; // ✅ this import is okay
-
-Route::get('/hubspot-handler', function (Request $request) {
-    $envProjectId = $request->query('ENVProjectID'); // ✅ use injected $request
-    if (!$envProjectId) {
-        abort(400, 'Missing ENVProjectID');
-    }
-
-    $project = \App\Models\SolarProject::where('ENVProjectID', $envProjectId)->firstOrFail();
-    return view('popup', compact('project'));
-});
-
 
 /* --------------------------------------------------------------------------
- | Public pages
+ | Homepage and Testing
  * --------------------------------------------------------------------------*/
 Route::view('/', 'welcome')->name('home');
 Route::get('/test-herd', fn () => 'Herd is working!');
 
-
-Route::get('/openai-query', [OpenAIQueryController::class, 'index'])->name('openai.index');
-Route::post('/openai-query', [OpenAIQueryController::class, 'generate'])->name('openai.generate');
-
 /* --------------------------------------------------------------------------
- | HubSpot integration
- * --------------------------------------------------------------------------*/
-// Route::post('/hubspot/update-popup-url', [HubspotSyncController::class, 'updatePopupUrl']);
-Route::get('/hubspot/create-field',      [HubspotSyncController::class, 'createPopupUrlField']);
-Route::get('/hubspot/delete-field',      [HubspotSyncController::class, 'deletePopupUrlField']);
-Route::get('/hubspot/sync-california', [\App\Http\Controllers\HubspotSyncController::class, 'syncCaliforniaContacts']);
-
-/* --------------------------------------------------------------------------
- | Popup and redirect helpers
+ | Popup + Hubspot Handler
  * --------------------------------------------------------------------------*/
 Route::get('/project/popup', function (Request $request) {
     $envProjectId = $request->query('ENVProjectID');
@@ -59,7 +35,20 @@ Route::get('/hubspot-handler', function (Request $request) {
 });
 
 /* --------------------------------------------------------------------------
- | Demo / viewer routes
+ | OpenAI Query Tool
+ * --------------------------------------------------------------------------*/
+Route::get('/openai-query', [OpenAIQueryController::class, 'index'])->name('openai.index');
+Route::post('/openai-query', [OpenAIQueryController::class, 'generate'])->name('openai.generate');
+
+/* --------------------------------------------------------------------------
+ | HubSpot
+ * --------------------------------------------------------------------------*/
+Route::get('/hubspot/create-field', [HubspotSyncController::class, 'createPopupUrlField']);
+Route::get('/hubspot/delete-field', [HubspotSyncController::class, 'deletePopupUrlField']);
+Route::get('/hubspot/sync-california', [HubspotSyncController::class, 'syncCaliforniaContacts']);
+
+/* --------------------------------------------------------------------------
+ | Demo & Viewer Routes
  * --------------------------------------------------------------------------*/
 Livewire::component('project-viewer', SolarProjectViewer::class);
 
@@ -69,18 +58,38 @@ Route::get('/project/{id}', function ($id) {
 });
 
 /* --------------------------------------------------------------------------
- | Authenticated dashboard & settings
+ | Dashboard & Authenticated Pages
  * --------------------------------------------------------------------------*/
 Route::view('dashboard', 'dashboard')
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
 Route::middleware(['auth'])->group(function () {
+    // Query Dashboard Routes
+    Route::get('/query-dashboard', [OpenAIQueryController::class, 'dashboard'])
+        ->name('query.dashboard');
+
+    Route::post('/query-dashboard', [OpenAIQueryController::class, 'generateDashboard'])
+        ->name('query.dashboard.generate');
+
+    // User Profile Management
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});Route::middleware(['auth'])->group(function () {
+    // Livewire settings pages
     Route::redirect('settings', 'settings/profile');
     Route::get('settings/profile',    Profile::class)->name('settings.profile');
     Route::get('settings/password',   Password::class)->name('settings.password');
     Route::get('settings/appearance', Appearance::class)->name('settings.appearance');
 
+    // ✅ Breeze profile routes for navigation menu to work
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+/* --------------------------------------------------------------------------
+ | Breeze Auth
+ * --------------------------------------------------------------------------*/
 require __DIR__.'/auth.php';
