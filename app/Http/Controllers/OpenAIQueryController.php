@@ -8,143 +8,97 @@ use Illuminate\Support\Facades\DB;
 
 class OpenAIQueryController extends Controller
 {
+    private array $allowedFields = [
+        // solar_projects
+        'Developer', 'Owner', 'FormerOwner', 'ProjectName', 'ProjectType',
+        'ProjectCapacityMW', 'CurrentOperatingCapacityMW', 'ProjectStatus',
+        'ProjectDurationhours', 'CommunitySolar', 'CoLocatedProject', 'BatteryType',
+        'PowerPurchaser', 'PowerPurchaseAgreementCapacityMW', 'PowerPurchaseAgreementYears',
+        'Supplier', 'EPC', 'FirstPowerDate', 'FirstYearPower', 'ConstructionDate',
+        'RepoweringDate', 'Country', 'StateProvince', 'City', 'ZipCode', 'Address',
+        'Latitude', 'Longitude', 'EstimatedCoordinates', 'EstimateSource',
+        'TotalProducingMonths', 'TotalMWhGenerated', 'AverageCapacityFactor',
+        'ISO', 'QueueNumber', 'FirstQueueDate', 'ENVProjectID',
+
+        // project_contacts
+        'envprojectid', 'contactname', 'contactemail', 'contactphone',
+
+        // key_company_contacts
+        'keycontactname', 'keycontactmail', 'keycontactphone', 'keycontacttitle',
+    ];
+
+    private array $allowedTables = [
+        'solar_projects', 'project_contacts', 'key_company_contacts'
+    ];
+
     public function index()
     {
         return view('openai.query');
     }
 
+    public function dashboard()
+    {
+        return view('openai.dashboard');
+    }
+
     public function generate(Request $request)
     {
         $prompt = $request->input('prompt');
+        $cheatSheet = $this->getCheatSheet();
 
-        $cheatSheetPath = storage_path('app/solar_cheatsheet.txt');
-        $cheatSheet = file_exists($cheatSheetPath)
-            ? file_get_contents($cheatSheetPath)
-            : '⚠️ Cheat sheet file not found.';
+        $messages = $this->buildMessages($prompt, $cheatSheet);
 
-        $messages = [
-            [
-                'role' => 'system',
-                'content' => <<<EOT
-You are an AI database assistant for a PostgreSQL table called "solar_projects".
-
-Below is the list of valid field names you MUST use when writing SQL queries.
-Only use fields from this list. Do not ask for more field information. Always output a complete SELECT statement.
-
-IMPORTANT:
-- Table name is always "solar_projects"
-- Field names are case-sensitive and must match exactly.
-- Wrap all table and field names in double quotes.
-- Do NOT invent fields or use unspecified ones.
-
-Here is the list of valid fields and their meanings:
-$cheatSheet
-EOT
-            ],
-            [
-                'role' => 'user',
-                'content' => $prompt,
-            ],
-        ];
-
-
-        $responseText = '';
-        $error = null;
-        $sql = null;
-        $result = null;
-        $textResponse = null;
-
-        try {
-            $response = Http::withToken(config('services.openai.key'))
-                ->timeout(30)
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => 'gpt-4',
-                    'messages' => $messages,
-                    'temperature' => 0,
-                ]);
-
-            if ($response->successful()) {
-                $responseText = $response->json()['choices'][0]['message']['content'] ?? '';
-            } else {
-                $error = 'OpenAI API error: ' . $response->body();
-            }
-        } catch (\Exception $e) {
-            $error = 'Request failed: ' . $e->getMessage();
-        }
+        $responseText = $this->callOpenAI($messages, $error);
 
         if ($error) {
-            return view('openai.query', [
-                'prompt' => $prompt,
-                'sql' => null,
-                'result' => null,
-                'textResponse' => '⚠️ ' . $error,
-            ]);
+            return view('openai.query', compact('prompt', 'error'));
         }
 
-        $sql = $this->extractSql($responseText ?? '');
+        $sql = $this->extractSql($responseText);
 
         if (empty($sql) || !str_starts_with(strtolower(trim($sql)), 'select')) {
-            return view('openai.query', [
-                'prompt' => $prompt,
-                'sql' => null,
-                'result' => null,
-                'textResponse' => $responseText ?: '⚠️ Sorry, I could not generate a valid SQL query from your request.',
-            ]);
+            return view('openai.query', compact('prompt', 'sql', 'responseText'));
         }
 
         try {
             $this->validateFieldsInSql($sql);
             $result = DB::select($sql);
         } catch (\Exception $e) {
-            $textResponse = '⚠️ ' . $e->getMessage();
+            return view('openai.query', compact('prompt', 'sql'))->with('textResponse', '⚠️ ' . $e->getMessage());
         }
 
-        return view('openai.query', [
-            'prompt' => $prompt,
-            'sql' => $sql,
-            'result' => $result,
-            'textResponse' => $textResponse,
-        ]);
+        return view('openai.query', compact('prompt', 'sql', 'result'));
     }
 
-    private function extractSql($openaiResponse)
+    public function generateDashboard(Request $request)
     {
-        if (preg_match('/```sql(.*?)```/s', $openaiResponse, $matches)) {
+        $prompt = $request->input('prompt');
+        $export = $request->input('export') ?? false;
+        $data = $this->processPrompt($prompt);
+
+        if ($export && !empty($data['result'])) {
+            return $this->exportCsv($data['result']);
+        }
+
+        return view('openai.dashboard', $data);
+    }
+
+    private function extractSql(string $response): string
+    {
+        if (preg_match('/```sql(.*?)```/s', $response, $matches)) {
             return trim($matches[1]);
         }
-
-        return trim($openaiResponse);
+        return trim($response);
     }
 
-    private function validateFieldsInSql($sql)
+    private function validateFieldsInSql(string $sql): void
     {
-        // ✅ List of allowed fields
-        $allowedFields = [
-            'Developer', 'Owner', 'FormerOwner', 'ProjectName', 'ProjectType',
-            'ProjectCapacityMW', 'CurrentOperatingCapacityMW', 'ProjectStatus',
-            'ProjectDurationhours', 'CommunitySolar', 'CoLocatedProject', 'BatteryType',
-            'PowerPurchaser', 'PowerPurchaseAgreementCapacityMW', 'PowerPurchaseAgreementYears',
-            'Supplier', 'EPC', 'FirstPowerDate', 'FirstYearPower', 'ConstructionDate',
-            'RepoweringDate', 'Country', 'StateProvince', 'City', 'ZipCode', 'Address',
-            'Latitude', 'Longitude', 'EstimatedCoordinates', 'EstimateSource',
-            'TotalProducingMonths', 'TotalMWhGenerated', 'AverageCapacityFactor',
-            'ISO', 'QueueNumber', 'FirstQueueDate'
-        ];
-
-        // ✅ List of allowed tables
-        $allowedTables = [
-            'solar_projects',
-            'project_contacts',
-            'key_company_contacts',
-        ];
-
-        // ✅ Extract only table.field references like "solar_projects"."ProjectName"
         preg_match_all('/"(\w+)"\."(\w+)"/', $sql, $matches);
         $tablesUsed = $matches[1] ?? [];
         $fieldsUsed = $matches[2] ?? [];
 
-        $allowedFieldsLower = array_map('strtolower', $allowedFields);
-        $allowedTablesLower = array_map('strtolower', $allowedTables);
+        $allowedFieldsLower = array_map('strtolower', $this->allowedFields);
+        $allowedTablesLower = array_map('strtolower', $this->allowedTables);
 
         foreach ($fieldsUsed as $field) {
             if (!in_array(strtolower($field), $allowedFieldsLower)) {
@@ -158,81 +112,40 @@ EOT
             }
         }
     }
-    public function dashboard()
+
+    private function getCheatSheet(): string
     {
-        return view('openai.dashboard');
-    }
-
-    public function generateDashboard(Request $request)
-    {
-        $prompt = $request->input('prompt');
-        $export = $request->input('export') ?? false;
-
-        $data = $this->processPrompt($prompt);
-
-        // Handle CSV export
-        if ($export && !empty($data['result'])) {
-            $filename = 'solar_query_' . now()->format('Ymd_His') . '.csv';
-            $headers = ['Content-Type' => 'text/csv'];
-            $rows = collect($data['result']);
-
-            $callback = function () use ($rows) {
-                $out = fopen('php://output', 'w');
-                if ($rows->isNotEmpty()) {
-                    fputcsv($out, array_keys((array) $rows->first()));
-                    foreach ($rows as $row) {
-                        fputcsv($out, (array) $row);
-                    }
-                }
-                fclose($out);
-            };
-
-            return response()->stream($callback, 200, array_merge($headers, [
-                'Content-Disposition' => "attachment; filename=\"$filename\"",
-            ]));
-        }
-
-        // ✅ Render your new dashboard view
-        return view('openai.dashboard', $data);
-    }
-
-    private function processPrompt(string $prompt): array
-    {
-        $cheatSheetPath = storage_path('app/solar_cheatsheet.txt');
-        $cheatSheet = file_exists($cheatSheetPath)
-            ? file_get_contents($cheatSheetPath)
+        $path = storage_path('app/solar_cheatsheet.txt');
+        return file_exists($path)
+            ? file_get_contents($path)
             : '⚠️ Cheat sheet file not found.';
+    }
 
-        $messages = [
+    private function buildMessages(string $prompt, string $cheatSheet): array
+    {
+        return [
             [
                 'role' => 'system',
                 'content' => <<<EOT
-You are an AI database assistant for a PostgreSQL table called "solar_projects".
+You are an AI assistant for a PostgreSQL database with 3 tables: "solar_projects", "project_contacts", and "key_company_contacts".
 
-Below is the list of valid field names you MUST use when writing SQL queries.
-Only use fields from this list. Do not ask for more field information. Always output a complete SELECT statement.
+RULES:
+- All table and field names are case-sensitive.
+- Always wrap table and field names in double quotes, e.g., "solar_projects"."ProjectName".
+- Never invent or guess field names.
+- Always qualify fields with their table name.
+- "StateProvince" must come from "solar_projects".
 
-IMPORTANT:
-- Table name is always "solar_projects"
-- Field names are case-sensitive and must match exactly.
-- Wrap all table and field names in double quotes.
-- Do NOT invent fields or use unspecified ones.
-
-Here is the list of valid fields and their meanings:
+Valid fields and tables:
 $cheatSheet
 EOT
             ],
-            [
-                'role' => 'user',
-                'content' => $prompt,
-            ],
+            ['role' => 'user', 'content' => $prompt],
         ];
+    }
 
-        $responseText = '';
-        $sql = null;
-        $result = null;
-        $textResponse = null;
-
+    private function callOpenAI(array $messages, &$error = null): string
+    {
         try {
             $response = Http::withToken(config('services.openai.key'))
                 ->timeout(30)
@@ -242,33 +155,62 @@ EOT
                     'temperature' => 0,
                 ]);
 
-            $responseText = $response->json()['choices'][0]['message']['content'] ?? '';
+            if (!$response->successful()) {
+                $error = 'OpenAI API error: ' . $response->body();
+                return '';
+            }
+
+            return $response->json()['choices'][0]['message']['content'] ?? '';
         } catch (\Exception $e) {
-            return [
-                'error' => '⚠️ Request failed: ' . $e->getMessage(),
-                'prompt' => $prompt,
-            ];
+            $error = 'Request failed: ' . $e->getMessage();
+            return '';
+        }
+    }
+
+    private function processPrompt(string $prompt): array
+    {
+        $cheatSheet = $this->getCheatSheet();
+        $messages = $this->buildMessages($prompt, $cheatSheet);
+
+        $responseText = $this->callOpenAI($messages, $error);
+
+        if ($error) {
+            return compact('prompt') + ['textResponse' => '⚠️ ' . $error];
         }
 
-        $sql = $this->extractSql($responseText ?? '');
-
+        $sql = $this->extractSql($responseText);
         if (empty($sql) || !str_starts_with(strtolower(trim($sql)), 'select')) {
-            return [
-                'sql' => null,
-                'result' => null,
-                'textResponse' => $responseText ?: '⚠️ Could not generate a valid SELECT statement.',
-                'prompt' => $prompt,
-            ];
+            return compact('prompt', 'sql') + ['textResponse' => '⚠️ Invalid SELECT statement.'];
         }
 
         try {
             $this->validateFieldsInSql($sql);
             $result = DB::select($sql);
         } catch (\Exception $e) {
-            $textResponse = '⚠️ ' . $e->getMessage();
+            return compact('prompt', 'sql') + ['textResponse' => '⚠️ ' . $e->getMessage()];
         }
 
-        return compact('prompt', 'sql', 'result', 'textResponse');
+        return compact('prompt', 'sql', 'result');
     }
 
+    private function exportCsv(array $rows)
+    {
+        $filename = 'solar_query_' . now()->format('Ymd_His') . '.csv';
+        $headers = ['Content-Type' => 'text/csv'];
+
+        $callback = function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            if (!empty($rows)) {
+                fputcsv($out, array_keys((array) $rows[0]));
+                foreach ($rows as $row) {
+                    fputcsv($out, (array) $row);
+                }
+            }
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, [
+                'Content-Disposition' => "attachment; filename=\"$filename\"",
+            ] + $headers);
+    }
 }

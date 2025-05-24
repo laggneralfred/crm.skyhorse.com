@@ -8,7 +8,7 @@ use App\Http\Controllers\OpenAIQueryController;
 use App\Http\Controllers\ProfileController;
 use App\Livewire\Settings\{Appearance, Password, Profile};
 use Livewire\Livewire;
-use App\Http\Livewire\SolarProjectViewer;
+//use App\Http\Livewire\SolarProjectViewer;
 
 /* --------------------------------------------------------------------------
  | Public Pages
