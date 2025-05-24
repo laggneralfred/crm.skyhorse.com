@@ -1,15 +1,25 @@
+<x-app-layout>
+    {{-- Optional: Remove this entire block to avoid duplicate headers --}}
+    {{-- <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            Solar Projects Query Tool
+        </h2>
+    </x-slot> --}}
 
-<x-layouts.app.sidebar title="Solar Projects Query Tool">
+    <div class="border-b border-gray-300"></div>
 
-    <div class="py-10 px-6 mx-auto max-w-7xl space-y-8 bg-white dark:bg-[#0f172a] text-gray-900 dark:text-gray-100">
-    {{-- Search form --}}
+    <div class="py-10 px-6 mx-auto max-w-7xl space-y-8">
+        <h2 class="text-2xl font-semibold text-gray-800">Solar Projects Query Tool</h2>
+
+        {{-- Search form --}}
         <form method="POST" action="{{ route('query.dashboard.generate') }}">
             @csrf
             <div class="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-4">
-                <input name="prompt" type="text" class="w-full border border-gray-300 rounded p-3 shadow-sm bg-white text-black"
+                <input name="prompt" type="text"
+                       class="w-full border border-gray-300 rounded p-3 shadow-sm bg-white text-black"
                        placeholder="Ask a question..." value="{{ old('prompt', $prompt ?? '') }}">
                 <div class="flex space-x-2">
-                    <button type="submit" class="bg-blue-600 text-black px-4 py-2 rounded shadow">Submit</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded shadow">Submit</button>
                     @if(!empty($result))
                         <button name="export" value="1" class="bg-green-600 text-white px-4 py-2 rounded shadow">Export CSV</button>
                     @endif
@@ -55,4 +65,4 @@
             </div>
         @endif
     </div>
-</x-layouts.app.sidebar>
+</x-app-layout>
