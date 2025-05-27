@@ -12,7 +12,7 @@
         <h2 class="text-2xl font-semibold text-gray-800">Solar Projects Query Tool</h2>
 
         {{-- Search form --}}
-        <form method="POST" action="{{ route('query.dashboard.generate') }}">
+        <form method="POST" action="{{ route('query.generate') }}">
             @csrf
             <div class="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-4">
                 <input name="prompt" type="text"

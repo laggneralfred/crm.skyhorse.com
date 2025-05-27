@@ -66,7 +66,8 @@ Route::view('/dashboard', 'dashboard')
 Route::middleware(['auth', 'verified'])->group(function () {
     // OpenAI Query Dashboard
     Route::get('/query-dashboard', [OpenAIQueryController::class, 'dashboard'])->name('query.dashboard');
-    Route::post('/query-dashboard', [OpenAIQueryController::class, 'generateDashboard'])->name('query.dashboard.generate');
+   Route::post('/query-dashboard', [OpenAIQueryController::class, 'generate'])->name('query.generate');
+   // Route::post('/query-dashboard', [OpenAIQueryController::class, 'generate'])->name('query.dashboard.generate');
 
     // Profile Management
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -98,6 +99,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/email/verify/{id}/{hash}', [VerifyEmailController::class, '__invoke'])
         ->middleware(['signed'])
         ->name('verification.verify');
+});
+// In routes/web.php
+
+use Illuminate\Support\Facades\Mail;
+
+Route::get('/test-email', function () {
+    Mail::raw('This is a test email from Skyhorse.', function ($message) {
+        $message->to('alfred.laggner@gmail.com')
+            ->subject('Skyhorse Email Test');
+    });
+
+    return 'Test email sent.';
 });
 
 require __DIR__.'/auth.php';
