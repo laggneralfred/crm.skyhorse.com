@@ -54,6 +54,16 @@ class OpenAIQueryController extends Controller
             return view('openai.query', compact('prompt', 'error'));
         }
 
+        Query::create([
+            'user_id' => auth()->id(),
+            'question' => $request->input('question'),
+        ]);
+        
+        $pastQueries = Query::where('user_id', auth()->id())
+            ->latest()
+            ->take(10)
+            ->get();
+
         $sql = $this->extractSql($responseText);
 
         if (empty($sql) || !str_starts_with(strtolower(trim($sql)), 'select')) {
