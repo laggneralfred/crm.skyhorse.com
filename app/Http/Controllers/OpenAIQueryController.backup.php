@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 
-class OpenAIQueryController extends Controller
+class xxxOpenAIQueryController extends Controller
 {
     private array $allowedFields = [
         // solar_projects
