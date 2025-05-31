@@ -27,6 +27,7 @@ class OpenAIQueryController extends Controller
             'sql' => null,
             'result' => null,
             'textResponse' => null,
+            'mapData' => [], // ✅ Required for map tab
             'pastQueries' => $pastQueries,
         ]);
     }
@@ -78,8 +79,8 @@ class OpenAIQueryController extends Controller
                 'prompt' => $prompt,
                 'sql' => null,
                 'tableData' => [],
-                'mapData' => [],
                 'textResponse' => '⚠️ ' . $e->getMessage(),
+                'mapData' => [], // ✅ added this line
                 'pastQueries' => $pastQueries,
             ]);
         }

@@ -4,10 +4,10 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use App\Models\Query;
 
 class OpenAIQueryService
-
 {
     public function generate(string $prompt): array
     {
@@ -44,6 +44,7 @@ RULES YOU MUST FOLLOW:
 - "StateProvince" ONLY comes from the "solar_projects" table.
 - Table header names in result should be standard expressions, like "Contact name" instead of contactname.
 - Use SQL aliases with double quotes only, e.g., AS "Contact name", not single quotes.
+- Whenever the "solar_projects" table is involved in the query, you MUST include the "Latitude" and "Longitude" fields in the SELECT clause and alias them as lowercase `latitude` and `longitude`, even if the user did not request them. These fields are required for mapping purposes.
 
 Below is the list of valid field names:
 $cheatSheet
@@ -76,10 +77,24 @@ EOT
         $this->validateFieldsInSql($sql);
         $result = DB::select($sql);
 
-        $tableData = collect($result)->map(fn($row) => (array) $row);
+        // Lowercase all result keys
+        $tableData = collect($result)->map(function ($row) {
+            $row = (array) $row;
+            $normalized = [];
+            foreach ($row as $key => $value) {
+                $normalized[strtolower($key)] = $value;
+            }
+            return $normalized;
+        });
+
+        // Only rows with lat/lon will show on map
         $mapData = $tableData->filter(fn($row) =>
         isset($row['latitude'], $row['longitude'])
         )->values();
+
+        // Log prompt + SQL
+        Log::info("OpenAI Prompt: $prompt");
+        Log::info("Generated SQL: $sql");
 
         return compact('tableData', 'mapData', 'sql', 'responseText');
     }
@@ -92,6 +107,6 @@ EOT
 
     protected function validateFieldsInSql(string $sql): void
     {
-        // Your validation logic here if needed
+        // You can add your field whitelist logic here
     }
 }
