@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\Query;
+use App\Models\Prompt;
 
 class OpenAIQueryService
 {
@@ -25,31 +26,24 @@ class OpenAIQueryService
         if ($existing && $existing->sql) {
             $sql = $existing->sql;
         } else {
-            $cheatSheetPath = storage_path('app/solar_cheatsheet.txt');
-            $cheatSheet = file_exists($cheatSheetPath)
-                ? file_get_contents($cheatSheetPath)
-                : '⚠️ Cheat sheet file not found.';
+            // 🔄 Load system prompt and cheat sheet from DB
+            $systemPromptRaw = Prompt::where('name', 'default-system')->value('content');
 
+            $cheatSheet = Prompt::where('name', 'default-cheatsheet')->value('content');
+
+            if (!$systemPromptRaw || !$cheatSheet) {
+                throw new \Exception('⚠️ Missing system prompt or cheat sheet in database.');
+            }
+
+           // $systemPrompt = str_replace('$cheatSheet', $cheatSheet, $systemPromptRaw);
+            //$systemPrompt = str_replace('{{cheatSheet}}', $cheatSheet, $systemPromptRaw);
+            $systemPrompt = str_replace('{{cheatSheet}}', $cheatSheet, $systemPromptRaw);
+
+
+            Log::info('[Prompt Used]', ['prompt' => $systemPrompt]);
+            Log::info('[Cheatsheet Used]', ['prompt' => $cheatSheet]);
             $messages = [
-                [
-                    'role' => 'system',
-                    'content' => <<<EOT
-You are an AI database assistant for a PostgreSQL database with three tables: "solar_projects", "project_contacts", and "key_company_contacts".
-
-RULES YOU MUST FOLLOW:
-- All table and field names are case-sensitive and MUST match exactly.
-- Wrap ALL table and field names in double quotes, like "solar_projects"."ProjectName".
-- NEVER invent field names or use lowercase versions of existing fields.
-- ALWAYS fully qualify every field with its table name.
-- "StateProvince" ONLY comes from the "solar_projects" table.
-- Table header names in result should be standard expressions, like "Contact name" instead of contactname.
-- Use SQL aliases with double quotes only, e.g., AS "Contact name", not single quotes.
-- Whenever the "solar_projects" table is involved in the query, you MUST include the "Latitude" and "Longitude" fields in the SELECT clause and alias them as lowercase `latitude` and `longitude`, even if the user did not request them. These fields are required for mapping purposes.
-
-Below is the list of valid field names:
-$cheatSheet
-EOT
-                ],
+                ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $prompt],
             ];
 
@@ -74,10 +68,11 @@ EOT
             }
         }
 
+        // 🔍 Validate and run SQL
         $this->validateFieldsInSql($sql);
         $result = DB::select($sql);
 
-        // Lowercase all result keys
+        // 🔡 Normalize keys to lowercase
         $tableData = collect($result)->map(function ($row) {
             $row = (array) $row;
             $normalized = [];
@@ -87,12 +82,12 @@ EOT
             return $normalized;
         });
 
-        // Only rows with lat/lon will show on map
+        // 🗺️ Filter for map
         $mapData = $tableData->filter(fn($row) =>
         isset($row['latitude'], $row['longitude'])
         )->values();
 
-        // Log prompt + SQL
+        // 📜 Log for debugging
         Log::info("OpenAI Prompt: $prompt");
         Log::info("Generated SQL: $sql");
 
@@ -107,6 +102,6 @@ EOT
 
     protected function validateFieldsInSql(string $sql): void
     {
-        // You can add your field whitelist logic here
+        // Add your SQL field whitelist or validation logic here if needed
     }
 }
