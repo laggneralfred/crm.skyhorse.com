@@ -7,14 +7,14 @@
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('dashboard') }}">
-                        <img src="{{ asset('images/skyhorse-logo.png') }}" alt="Skyhorse Logo" class="block h-10 w-auto">
+                        <img src="{{ asset('images/hzlogo.png') }}" alt="Horizon View TechLogo" class="block h-10 w-auto">
                     </a>
                 </div>
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Skyhorse AI') }}
+                        {{ __('') }}
                     </x-nav-link>
                 </div>
             </div>

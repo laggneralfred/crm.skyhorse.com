@@ -79,8 +79,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/query-dashboard/generate', [OpenAIQueryController::class, 'generate']); // optional fallback
     Route::any('/query-dashboard/run/{query}', [OpenAIQueryController::class, 'runStoredQuery'])->name('query.run');
     Route::any('/query-dashboard/delete/{query}', [OpenAIQueryController::class, 'deleteQuery'])->name('query.delete');
+
     Route::post('/query-dashboard/clear', [OpenAIQueryController::class, 'clearQueries'])->name('query.clear');
-    Route::any('/query-dashboard/favorite/{query}', [OpenAIQueryController::class, 'favorite'])->name('query.favorite');Route::post('/query-dashboard/favorite/{query}', [OpenAIQueryController::class, 'favorite'])->name('query.favorite');
+  //  Route::any('/query-dashboard/favorite/{query}', [OpenAIQueryController::class, 'favorite'])->name('query.favorite');Route::post('/query-dashboard/favorite/{query}', [OpenAIQueryController::class, 'favorite'])->name('query.favorite');
+    Route::post('/queries/{query}/favorite', [OpenAIQueryController::class, 'favorite'])->name('query.favorite');
+    Route::post('/query-dashboard/favorite/{query}', [OpenAIQueryController::class, 'favorite'])->name('query.favorite');
+
 
 });
 
@@ -96,7 +100,6 @@ Route::middleware(['auth'])->group(function () {
         ->middleware(['signed'])
         ->name('verification.verify');
 });
-
 /* --------------------------------------------------------------------------
  | Auth Scaffolding (from Breeze)
  * --------------------------------------------------------------------------*/

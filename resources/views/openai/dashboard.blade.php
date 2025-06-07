@@ -64,16 +64,20 @@
                                         {{ $query->created_at->diffForHumans() }}
                                     </td>
                                     <td class="px-4 py-2 text-right space-x-2">
-                                        <form method="POST" action="{{ route('query.favorite', $query) }}">
-                                            @csrf
-                                            <button type="submit" class="text-yellow-500 hover:text-yellow-700" title="Toggle Favorite">
-                                                {{ $query->favorited ? '⭐' : '☆' }}
-                                            </button>
-                                        </form>
-                                        <form method="POST" action="{{ route('query.delete', $query) }}">
-                                            @csrf
-                                            <button type="submit" class="text-red-500 hover:text-red-700" title="Delete">❌</button>
-                                        </form>
+                                        <button type="button"
+                                                class="toggle-favorite text-yellow-500 hover:text-yellow-700"
+                                                data-id="{{ $query->id }}"
+                                                title="Toggle Favorite">
+                                            {{ $query->favorited ? '⭐' : '☆' }}
+                                        </button>
+
+                                        <button
+                                                type="button"
+                                                class="delete-query text-red-500 hover:text-red-700"
+                                                data-id="{{ $query->id }}"
+                                                title="Delete">❌
+                                        </button>
+
                                     </td>
                                 </tr>
                             @endforeach
@@ -245,6 +249,57 @@
             }));
         });
     </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.toggle-favorite').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const id = button.dataset.id;
+                    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                    const response = await fetch(`/query-dashboard/favorite/${id}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': token,
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const json = await response.json();
+                        button.textContent = json.favorited ? '⭐' : '☆';
+                    } else {
+                        console.error('Favorite toggle failed.');
+                    }
+                });
+            });
+        });
+    </script>
+    <script>
+        document.querySelectorAll('.delete-query').forEach(button => {
+            button.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to delete this query?')) return;
+
+                const id = button.dataset.id;
+                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                const response = await fetch(`/query-dashboard/delete/${id}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': token,
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    // Remove the table row
+                    button.closest('tr').remove();
+                } else {
+                    console.error('Delete query failed.');
+                }
+            });
+        });
+    </script>
+
 
 
 </x-app-layout>
